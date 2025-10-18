@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "my-app",
+      "name": "lumina",
       "dependencies": {
         "next": "15.5.6",
         "react": "19.1.0",
