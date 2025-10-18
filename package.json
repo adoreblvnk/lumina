@@ -12,6 +12,7 @@
     "@ai-sdk/elevenlabs": "^1.0.14",
     "@ai-sdk/groq": "^2.0.24",
     "@ai-sdk/openai": "^2.0.52",
+    "@elevenlabs/elevenlabs-js": "^2.19.0",
     "@elevenlabs/react": "^0.7.0",
     "@radix-ui/react-slot": "^1.1.0",
     "@react-three/drei": "^10.7.6",

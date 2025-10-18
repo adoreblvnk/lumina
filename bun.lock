@@ -7,6 +7,7 @@
         "@ai-sdk/elevenlabs": "^1.0.14",
         "@ai-sdk/groq": "^2.0.24",
         "@ai-sdk/openai": "^2.0.52",
+        "@elevenlabs/elevenlabs-js": "^2.19.0",
         "@elevenlabs/react": "^0.7.0",
         "@radix-ui/react-slot": "^1.1.0",
         "@react-three/drei": "^10.7.6",
@@ -71,6 +72,8 @@
     "@dimforge/rapier3d-compat": ["@dimforge/rapier3d-compat@0.12.0", "", {}, "sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow=="],
 
     "@elevenlabs/client": ["@elevenlabs/client@0.7.1", "", { "dependencies": { "@elevenlabs/types": "0.0.1", "livekit-client": "^2.11.4" } }, "sha512-cYOEPjAi6+nooHx/+odoBbnEYyDNsZNzJeApT+D82tI2b0I9W5mrTqMZb12Tpvhn5cdzT6w8GVmLvs438vrOCw=="],
+
+    "@elevenlabs/elevenlabs-js": ["@elevenlabs/elevenlabs-js@2.19.0", "", { "dependencies": { "command-exists": "^1.2.9", "node-fetch": "^2.7.0" } }, "sha512-3hKO469/dNDn+5tRadUUHC/LYNkoIdHRMEBsI/TOsdJrSlbN1wofYuRIEbTSOdjM2Ykfm2kTXCL0WGYloiRY9g=="],
 
     "@elevenlabs/react": ["@elevenlabs/react@0.7.1", "", { "dependencies": { "@elevenlabs/client": "0.7.1" }, "peerDependencies": { "react": ">=16.8.0" } }, "sha512-fY4PtTmZyrFsGfmcEeiCBzL0V/rplRjJOclUNf1JYHgxjXJrl2gEXPFDQ6F1uHoXPdJpN/aTdFhlkfCxiErl2A=="],
 

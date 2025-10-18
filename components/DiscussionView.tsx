@@ -3,10 +3,8 @@
 import * as React from "react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { useAgentConversation } from "@/app/hooks/useAgentConversation";
-import { ElevenStreamingWeb } from "@/lib/stream";
 
-// --- Components ---
+// --- Sub-components for UI ---
 
 const DiscussionDepth = ({ depth }: { depth: number }) => (
   <div className="bg-white p-6 rounded-lg shadow-md">
@@ -22,14 +20,14 @@ const KeyTopics = ({ topics }: { topics: { name: string, confidence: number }[] 
   <div className="bg-white p-6 rounded-lg shadow-md">
     <h3 className="text-lg font-bold">Key Topics</h3>
     <div className="space-y-2 mt-2">
-      {topics.map((topic, index) => (
+      {topics.length > 0 ? topics.map((topic, index) => (
         <div key={index}>
           <p>{topic.name}</p>
           <div className="w-full bg-gray-200 rounded-full h-2.5">
             <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${topic.confidence}%` }} />
           </div>
         </div>
-      ))}
+      )) : <p>No topics identified yet.</p>}
     </div>
   </div>
 );
@@ -63,55 +61,102 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
   const [aiSpeaking, setAiSpeaking] = useState(false);
   const [aiMessage, setAiMessage] = useState("");
   const [notes, setNotes] = useState("");
-  const [discussionDepth, setDiscussionDepth] = useState(65);
-  const [keyTopics, setKeyTopics] = useState([{ name: "Student Expression", confidence: 85 },{ name: "Cost to Families", confidence: 70 },{ name: "School Safety", confidence: 50 }]);
-  const [questionsAsked, setQuestionsAsked] = useState(5);
-  const [keyInsights, setKeyInsights] = useState(3);
-  const [currentSpeaker, setCurrentSpeaker] = useState("None");
-  
-  const audioPlayer = useRef<ElevenStreamingWeb | null>(null);
+  const [discussionDepth, setDiscussionDepth] = useState(0);
+  const [keyTopics, setKeyTopics] = useState<{ name: string, confidence: number }[]>([]);
+  const [questionsAsked, setQuestionsAsked] = useState(0);
+  const [keyInsights, setKeyInsights] = useState(0);
+  const [currentSpeaker, setCurrentSpeaker] = useState("Analysis in progress...");
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcripts, setTranscripts] = useState<string[]>([]);
 
-  const { startConversation, stopConversation, isConnected } = useAgentConversation({
-    onUserTranscript: (transcript) => {
-      console.log("User transcript:", transcript);
-      // Diarization is not available in this event, so we can't know who is speaking.
-      // We can show the transcript if we want.
-    },
-    onAgentResponse: (response) => {
-      setAiWantsToSpeak(true);
-      setAiMessage(response || "Lumina has a suggestion.");
-    },
-    onAudioChunk: (audio_base_64) => {
-      if (!aiSpeaking) {
-        setAiWantsToSpeak(false);
-        setAiSpeaking(true);
-        // setAiMessage("Lumina is speaking...");
-        audioPlayer.current?.initStream();
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const analysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+
+  const discussionPrompt = "Should school students be forced to wear school uniforms?";
+  const discussionMode = "Breadth";
+
+  const processAudioAndAnalyze = useCallback(async () => {
+    if (audioChunksRef.current.length === 0) return;
+
+    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    audioChunksRef.current = [];
+
+    const formData = new FormData();
+    formData.append('audio', audioBlob);
+    formData.append('prompt', discussionPrompt);
+    formData.append('discussionMode', discussionMode);
+
+    try {
+      const response = await fetch('/api/analyze-discussion', { method: 'POST', body: formData });
+      if (!response.ok) throw new Error('API request failed');
+      
+      const result = await response.json();
+      
+      if (result.transcript) {
+        setTranscripts(prev => [...prev, result.transcript]);
+        if (result.transcript.includes('?')) setQuestionsAsked(prev => prev + 1);
       }
-      audioPlayer.current?.playChunk({ buffer: audio_base_64 });
+
+      if (result.keyTopics) setKeyTopics(result.keyTopics);
+      
+      setDiscussionDepth(prev => Math.min(100, prev + 2));
+
+      if (result.interventionSuggestion && !aiWantsToSpeak && !aiSpeaking) {
+        setAiMessage(result.interventionSuggestion);
+        setAiWantsToSpeak(true);
+      }
+
+    } catch (error) {
+      console.error("Error during audio analysis:", error);
     }
-  });
+  }, [aiWantsToSpeak, aiSpeaking]);
+
+  const startConversation = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setIsRecording(true);
+      
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      
+      mediaRecorderRef.current.start();
+
+      analysisIntervalRef.current = setInterval(() => {
+        if (mediaRecorderRef.current?.state === 'recording') {
+          mediaRecorderRef.current.stop(); // This triggers ondataavailable
+          processAudioAndAnalyze();
+          mediaRecorderRef.current.start(); // Start recording the next chunk
+        }
+      }, 7000); // Analyze audio in 7-second chunks
+
+    } catch (error) {
+      console.error('Failed to get microphone access:', error);
+      alert("Microphone access is required to start the discussion.");
+    }
+  }, [processAudioAndAnalyze]);
+
+  const stopConversation = useCallback(() => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+    if (analysisIntervalRef.current) clearInterval(analysisIntervalRef.current);
+    setIsRecording(false);
+    processAudioAndAnalyze(); // Process any final audio chunk
+  }, [processAudioAndAnalyze]);
 
   useEffect(() => {
-    audioPlayer.current = new ElevenStreamingWeb();
-
-    const timer = setInterval(() => {
-      setTimeRemaining(prevTime => (prevTime > 0 ? prevTime - 1 : 0));
-    }, 1000);
-
+    audioPlayerRef.current = new Audio();
+    const timer = setInterval(() => setTimeRemaining(prev => (prev > 0 ? prev - 1 : 0)), 1000);
     return () => {
       clearInterval(timer);
+      stopConversation();
     };
-  }, []);
-
-  const handleStart = useCallback(async () => {
-    try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      await startConversation();
-    } catch (error) {
-      console.error('Failed to start conversation:', error);
-    }
-  }, [startConversation]);
+  }, [stopConversation]);
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -119,14 +164,31 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
     return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
   };
 
-  const handleLetAiSpeak = () => {
+  const handleLetAiSpeak = async () => {
+    if (!aiMessage) return;
     setAiWantsToSpeak(false);
     setAiSpeaking(true);
-    // The audio will play via onAudioChunk. We can have a timeout to hide the message.
-    setTimeout(() => {
-      setAiSpeaking(false);
-      setAiMessage("");
-    }, 5000); // Assuming audio playback is around 5s
+    try {
+        const response = await fetch('/api/generate-speech', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: aiMessage }),
+        });
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        if (audioPlayerRef.current) {
+            audioPlayerRef.current.src = audioUrl;
+            audioPlayerRef.current.play();
+            audioPlayerRef.current.onended = () => {
+                setAiSpeaking(false);
+                setAiMessage("");
+                URL.revokeObjectURL(audioUrl);
+            };
+        }
+    } catch (error) {
+        console.error("Speech generation failed:", error);
+        setAiSpeaking(false);
+    }
   };
 
   const handleDismiss = () => {
@@ -139,19 +201,23 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
       <div className="col-span-2 space-y-6">
         <div className="bg-white p-6 rounded-lg shadow-md">
           <div className="flex justify-between items-start">
-            <div><h2 className="text-xl font-bold">Discussion Topic</h2><p className="mt-2 text-lg">"Should school students be forced to wear school uniforms?"</p></div>
+            <div><h2 className="text-xl font-bold">Discussion Topic</h2><p className="mt-2 text-lg">"{discussionPrompt}"</p></div>
             <div className="text-right"><p className="font-bold">Time Remaining</p><p className="text-2xl">{formatTime(timeRemaining)}</p></div>
           </div>
           <div className="flex gap-2 my-4">
-            <Button onClick={handleStart} disabled={isConnected}>Start Conversation</Button>
-            <Button onClick={stopConversation} disabled={!isConnected} variant="destructive">Stop Conversation</Button>
+            <Button onClick={startConversation} disabled={isRecording}>Start Conversation</Button>
+            <Button onClick={stopConversation} disabled={!isRecording} variant="destructive">Stop Conversation</Button>
           </div>
-          <p>Status: {isConnected ? 'Connected' : 'Disconnected'}</p>
-          <div className="mt-4"><p className="font-bold">Current Speaker</p><p>{currentSpeaker}</p></div>
+          <p>Status: {isRecording ? 'Recording and Analyzing...' : 'Stopped'}</p>
+          <div className="mt-4"><p className="font-bold">Live Transcript</p>
+            <div className="mt-1 h-24 overflow-y-auto bg-gray-50 p-2 rounded border">
+              {transcripts.length > 0 ? transcripts.map((t, i) => <p key={i}>{t}</p>) : "..."}
+            </div>
+          </div>
           {aiWantsToSpeak && !aiSpeaking && ( 
             <div className="mt-4 p-4 bg-blue-100 rounded-lg flex justify-between items-center">
-              <p>{aiMessage}</p>
-              <div><Button onClick={handleLetAiSpeak}>Show</Button><Button onClick={handleDismiss} variant="ghost">Dismiss</Button></div>
+              <p>Lumina has a suggestion: "{aiMessage}"</p>
+              <div><Button onClick={handleLetAiSpeak}>Let Lumina Speak</Button><Button onClick={handleDismiss} variant="ghost">Dismiss</Button></div>
             </div>
           )}
           {aiSpeaking && (

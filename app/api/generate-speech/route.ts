@@ -1,8 +1,8 @@
-import { experimental_generateSpeech as generateSpeech } from 'ai';
-import { createElevenLabs } from '@ai-sdk/elevenlabs';
-import { NextRequest, NextResponse } from 'next/server';
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
+import { NextRequest } from 'next/server';
+import { PassThrough } from 'stream';
 
-const elevenlabs = createElevenLabs({
+const elevenlabs = new ElevenLabsClient({
   apiKey: process.env.ELEVENLABS_API_KEY,
 });
 
@@ -13,22 +13,42 @@ export async function POST(req: NextRequest) {
     const { text } = await req.json();
 
     if (!text) {
-      return NextResponse.json({ error: 'Text to speak is required' }, { status: 400 });
+      return new Response('Text to speak is required', { status: 400 });
     }
 
-    const { audio } = await generateSpeech({
-      model: elevenlabs.speech('eleven_multilingual_v2'),
-      text: text,
-      voice: 'Rachel',
-      speed: 0.1,
+    const audioStream = await elevenlabs.textToSpeech.stream('mbL34QDB5FptPamlgvX5', {
+      modelId: 'eleven_multilingual_v2',
+      text,
+      outputFormat: 'mp3_44100_128',
+      voiceSettings: {
+        stability: 0,
+        similarityBoost: 1.0,
+        useSpeakerBoost: true,
+        speed: 1.0,
+      },
     });
 
-    const base64Audio = Buffer.from(audio).toString('base64');
-    const audioDataUrl = `data:audio/mpeg;base64,${base64Audio}`;
+    const passThrough = new PassThrough();
+    
+    const chunks: Buffer[] = [];
+    for await (const chunk of audioStream) {
+      passThrough.write(chunk);
+      chunks.push(chunk);
+    }
+    passThrough.end();
 
-    return NextResponse.json({ audioUrl: audioDataUrl });
+    // Correctly create a streaming response
+    const response = new Response(passThrough as any, {
+      status: 200,
+      headers: {
+        'Content-Type': 'audio/mpeg',
+      },
+    });
+
+    return response;
+
   } catch (error) {
     console.error('Error generating speech:', error);
-    return NextResponse.json({ error: 'Failed to generate speech' }, { status: 500 });
+    return new Response('Failed to generate speech', { status: 500 });
   }
 }
