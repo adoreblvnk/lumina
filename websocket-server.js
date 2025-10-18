@@ -40,6 +40,7 @@ wss.on('connection', (ws, req) => {
 app.use(express.json());
 app.post('/alert', (req, res) => {
   const { message } = req.body;
+  console.log('Received alert:', message); // Added log
   if (message && channels.teacher.size > 0) {
     const alertMessage = JSON.stringify({ type: 'SEVERE_ALERT', payload: { message } });
     channels.teacher.forEach(client => {
@@ -47,8 +48,10 @@ app.post('/alert', (req, res) => {
         client.send(alertMessage);
       }
     });
+    console.log('Alert broadcasted to teacher dashboard'); // Added log
     res.status(200).send('Alert sent');
   } else {
+    console.log('Alert failed: No message or no teacher clients connected'); // Added log
     res.status(400).send('No message or no teacher clients connected');
   }
 });
