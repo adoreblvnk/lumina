@@ -28,16 +28,32 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Transcribe the incoming audio chunk
-    const { text: transcript } = await transcribe({
-      model: elevenlabs.transcription('scribe_v1'),
-      audio: await audioBlob.arrayBuffer(),
-      providerOptions: {
-       elevenlabs: {
-        tagAudioEvents: false,
-        languageCode: "eng",
-       }
+    let transcript = '';
+    try {
+      const { text } = await transcribe({
+        model: elevenlabs.transcription('scribe_v1'),
+        audio: await audioBlob.arrayBuffer(),
+        providerOptions: {
+          elevenlabs: {
+            languageCode: 'en',
+          },
+        },
+      });
+      transcript = text;
+    } catch (error: any) {
+      // The `transcribe` function can throw errors when no speech is detected or audio is too short.
+      // We treat these as a silent chunk and let the silence handling logic proceed.
+      if (
+        error.name !== 'AI_NoTranscriptGeneratedError' &&
+        !(error.name === 'AI_APICallError' && error.responseBody?.includes('audio_too_short'))
+      ) {
+        // Re-throw any other unexpected errors.
+        throw error;
       }
-    });
+    }
+
+    // Clean the transcript to remove non-speech text in parentheses (e.g., "(door opens)")
+    transcript = transcript.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
 
     // Handle silence
     if (!transcript.trim()) {
