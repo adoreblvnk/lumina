@@ -5,7 +5,7 @@ import Link from "next/link";
 import {ElevenLabsLogo, GithubLogo} from "@/components/logos";
 
 export const metadata: Metadata = {
-    title: "ConvAI",
+    title: "Lumina",
 };
 
 export default function RootLayout({children}: Readonly<{ children: React.ReactNode }>) {
@@ -28,7 +28,7 @@ export default function RootLayout({children}: Readonly<{ children: React.ReactN
 
                 <div className={"flex gap-4 justify-end"}>
                     <Link
-                        href="https://github.com/jonatanvm/convai-demo"
+                        href="https://github.com/your-repo/lumina-hackathon"
                         target="_blank"
                         rel="noopener noreferrer"
                         className={"py-0.5"}
