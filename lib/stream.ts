@@ -54,7 +54,7 @@ export class ElevenStreamingWeb implements ElevenStreamingPlugin {
     const audioBuffer = this.audioContext.createBuffer(
       1,
       uint8Array.length / 2,
-      44100,
+      16000,
     );
     const channelData = audioBuffer.getChannelData(0);
     for (let i = 0; i < data.byteLength; i += 2) {

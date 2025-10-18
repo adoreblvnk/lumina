@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
       model: elevenlabs.speech('eleven_multilingual_v2'),
       text: text,
       voice: 'Rachel',
+      speed: 0.1,
     });
 
     const base64Audio = Buffer.from(audio).toString('base64');

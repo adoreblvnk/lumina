@@ -85,7 +85,7 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
       if (!aiSpeaking) {
         setAiWantsToSpeak(false);
         setAiSpeaking(true);
-        setAiMessage("Lumina is speaking...");
+        // setAiMessage("Lumina is speaking...");
         audioPlayer.current?.initStream();
       }
       audioPlayer.current?.playChunk({ buffer: audio_base_64 });
@@ -148,7 +148,7 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
           </div>
           <p>Status: {isConnected ? 'Connected' : 'Disconnected'}</p>
           <div className="mt-4"><p className="font-bold">Current Speaker</p><p>{currentSpeaker}</p></div>
-          {aiWantsToSpeak && (
+          {aiWantsToSpeak && !aiSpeaking && ( 
             <div className="mt-4 p-4 bg-blue-100 rounded-lg flex justify-between items-center">
               <p>{aiMessage}</p>
               <div><Button onClick={handleLetAiSpeak}>Show</Button><Button onClick={handleDismiss} variant="ghost">Dismiss</Button></div>
