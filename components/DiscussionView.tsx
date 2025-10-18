@@ -71,49 +71,154 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const transcriptionIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const analysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+  const prevAiWantsToSpeakRef = useRef(false);
 
   const discussionPrompt = "Should school students be forced to wear school uniforms?";
   const discussionMode = "Breadth";
 
-  const startConversation = useCallback(async () => {
-    const processAudioAndAnalyze = async () => {
-      if (audioChunksRef.current.length === 0) return;
+  // Function to play bell sound using Web Audio API
+  const playBellSound = useCallback(() => {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    // Create multiple oscillators for a richer bell sound
+    const frequencies = [800, 1000, 1200];
+    const now = audioContext.currentTime;
+    
+    frequencies.forEach((freq, index) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = freq;
+      oscillator.type = 'sine';
+      
+      // Create envelope for bell-like decay
+      gainNode.gain.setValueAtTime(0.3 / (index + 1), now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 1);
+      
+      oscillator.start(now);
+      oscillator.stop(now + 1);
+    });
+  }, []);
 
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-      audioChunksRef.current = [];
+  // Play bell sound when aiWantsToSpeak changes from false to true
+  useEffect(() => {
+    if (aiWantsToSpeak && !prevAiWantsToSpeakRef.current) {
+      playBellSound();
+    }
+    prevAiWantsToSpeakRef.current = aiWantsToSpeak;
+  }, [aiWantsToSpeak, playBellSound]);
 
-      const formData = new FormData();
-      formData.append('audio', audioBlob);
-      formData.append('prompt', discussionPrompt);
-      formData.append('discussionMode', discussionMode);
+  // Function to process audio for transcription only (no analysis)
+  const processAudioTranscription = useCallback(async () => {
+    if (audioChunksRef.current.length === 0) return;
 
-      try {
-        const response = await fetch('/api/analyze-discussion', { method: 'POST', body: formData });
-        if (!response.ok) throw new Error('API request failed');
-        
-        const result = await response.json();
-        
-        if (result.transcript) {
-          setTranscripts(prev => [...prev, result.transcript]);
-          if (result.transcript.includes('?')) setQuestionsAsked(prev => prev + 1);
-        }
+    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    audioChunksRef.current = [];
 
-        if (result.keyTopics) setKeyTopics(result.keyTopics);
-        
-        setDiscussionDepth(prev => Math.min(100, prev + 2));
+    const formData = new FormData();
+    formData.append('audio', audioBlob);
+    formData.append('prompt', discussionPrompt);
+    formData.append('discussionMode', discussionMode);
+    formData.append('transcribeOnly', 'true'); // Flag for transcription only
 
-        if (result.interventionSuggestion && !aiWantsToSpeak && !aiSpeaking) {
-          setAiMessage(result.interventionSuggestion);
-          setAiWantsToSpeak(true);
-        }
-
-      } catch (error) {
-        console.error("Error during audio analysis:", error);
+    try {
+      const response = await fetch('/api/analyze-discussion', { method: 'POST', body: formData });
+      if (!response.ok) throw new Error('API request failed');
+      
+      const result = await response.json();
+      
+      if (result.transcript) {
+        setTranscripts(prev => [...prev, result.transcript]);
+        if (result.transcript.includes('?')) setQuestionsAsked(prev => prev + 1);
       }
-    };
 
+    } catch (error) {
+      console.error("Error during audio transcription:", error);
+    }
+  }, []);
+
+  // Function to process audio for full analysis
+  const processAudioAndAnalyze = useCallback(async () => {
+    if (audioChunksRef.current.length === 0) return;
+
+    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    audioChunksRef.current = [];
+
+    const formData = new FormData();
+    formData.append('audio', audioBlob);
+    formData.append('prompt', discussionPrompt);
+    formData.append('discussionMode', discussionMode);
+    formData.append('transcribeOnly', 'false'); // Flag for full analysis
+
+    try {
+      const response = await fetch('/api/analyze-discussion', { method: 'POST', body: formData });
+      if (!response.ok) throw new Error('API request failed');
+      
+      const result = await response.json();
+      
+      if (result.transcript) {
+        setTranscripts(prev => [...prev, result.transcript]);
+        if (result.transcript.includes('?')) setQuestionsAsked(prev => prev + 1);
+      }
+
+      if (result.keyTopics) setKeyTopics(result.keyTopics);
+      
+      setDiscussionDepth(prev => Math.min(100, prev + 2));
+
+      if (result.interventionSuggestion && !aiWantsToSpeak && !aiSpeaking) {
+        setAiMessage(result.interventionSuggestion);
+        setAiWantsToSpeak(true);
+        // Stop the analysis interval when AI wants to speak
+        if (analysisIntervalRef.current) {
+          clearInterval(analysisIntervalRef.current);
+          analysisIntervalRef.current = null;
+        }
+      }
+
+    } catch (error) {
+      console.error("Error during audio analysis:", error);
+    }
+  }, [aiWantsToSpeak, aiSpeaking]);
+
+  const startTranscriptionInterval = useCallback(() => {
+    // Clear any existing interval
+    if (transcriptionIntervalRef.current) {
+      clearInterval(transcriptionIntervalRef.current);
+    }
+
+    // Start transcription interval (every 7 seconds)
+    transcriptionIntervalRef.current = setInterval(() => {
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop();
+        processAudioTranscription();
+        mediaRecorderRef.current.start();
+      }
+    }, 7000);
+  }, [processAudioTranscription]);
+
+  const startAnalysisInterval = useCallback(() => {
+    // Clear any existing interval
+    if (analysisIntervalRef.current) {
+      clearInterval(analysisIntervalRef.current);
+    }
+
+    // Start analysis interval (every 15 seconds)
+    analysisIntervalRef.current = setInterval(() => {
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop();
+        processAudioAndAnalyze();
+        mediaRecorderRef.current.start();
+      }
+    }, 15000);
+  }, [processAudioAndAnalyze]);
+
+  const startConversation = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setIsRecording(true);
@@ -125,65 +230,44 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
       
       mediaRecorderRef.current.start();
 
-      analysisIntervalRef.current = setInterval(() => {
+      // Make an initial transcription call after 3 seconds for immediate feedback
+      setTimeout(() => {
         if (mediaRecorderRef.current?.state === 'recording') {
-          mediaRecorderRef.current.stop(); // This triggers ondataavailable
-          processAudioAndAnalyze();
-          mediaRecorderRef.current.start(); // Start recording the next chunk
+          mediaRecorderRef.current.stop();
+          processAudioTranscription();
+          mediaRecorderRef.current.start();
         }
-      }, 7000); // Analyze audio in 7-second chunks
+        // Start the regular transcription interval (7 seconds)
+        startTranscriptionInterval();
+      }, 3000);
+
+      // Make an initial analysis call after 5 seconds
+      setTimeout(() => {
+        if (mediaRecorderRef.current?.state === 'recording') {
+          mediaRecorderRef.current.stop();
+          processAudioAndAnalyze();
+          mediaRecorderRef.current.start();
+        }
+        // Start the regular analysis interval (15 seconds)
+        startAnalysisInterval();
+      }, 5000);
 
     } catch (error) {
       console.error('Failed to get microphone access:', error);
       alert("Microphone access is required to start the discussion.");
     }
-  }, [aiWantsToSpeak, aiSpeaking]);
+  }, [startTranscriptionInterval, startAnalysisInterval, processAudioTranscription, processAudioAndAnalyze]);
 
   const stopConversation = useCallback(() => {
-    const processAudioAndAnalyze = async () => {
-      if (audioChunksRef.current.length === 0) return;
-
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-      audioChunksRef.current = [];
-
-      const formData = new FormData();
-      formData.append('audio', audioBlob);
-      formData.append('prompt', discussionPrompt);
-      formData.append('discussionMode', discussionMode);
-
-      try {
-        const response = await fetch('/api/analyze-discussion', { method: 'POST', body: formData });
-        if (!response.ok) throw new Error('API request failed');
-        
-        const result = await response.json();
-        
-        if (result.transcript) {
-          setTranscripts(prev => [...prev, result.transcript]);
-          if (result.transcript.includes('?')) setQuestionsAsked(prev => prev + 1);
-        }
-
-        if (result.keyTopics) setKeyTopics(result.keyTopics);
-        
-        setDiscussionDepth(prev => Math.min(100, prev + 2));
-
-        if (result.interventionSuggestion && !aiWantsToSpeak && !aiSpeaking) {
-          setAiMessage(result.interventionSuggestion);
-          setAiWantsToSpeak(true);
-        }
-
-      } catch (error) {
-        console.error("Error during audio analysis:", error);
-      }
-    };
-
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
     }
+    if (transcriptionIntervalRef.current) clearInterval(transcriptionIntervalRef.current);
     if (analysisIntervalRef.current) clearInterval(analysisIntervalRef.current);
     setIsRecording(false);
-    processAudioAndAnalyze(); // Process any final audio chunk
-  }, [aiWantsToSpeak, aiSpeaking]);
+    processAudioAndAnalyze();
+  }, [processAudioAndAnalyze]);
 
   useEffect(() => {
     audioPlayerRef.current = new Audio();
@@ -222,17 +306,23 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
                 setAiSpeaking(false);
                 setAiMessage("");
                 URL.revokeObjectURL(audioUrl);
+                // Restart the analysis interval after AI finishes speaking
+                startAnalysisInterval();
             };
         }
     } catch (error) {
         console.error("Speech generation failed:", error);
         setAiSpeaking(false);
+        // Restart interval even if there's an error
+        startAnalysisInterval();
     }
   };
 
   const handleDismiss = () => {
     setAiWantsToSpeak(false);
     setAiMessage("");
+    // Restart the analysis interval after dismissing
+    startAnalysisInterval();
   };
 
   return (
@@ -251,7 +341,7 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
           </div>
           {aiWantsToSpeak && !aiSpeaking && ( 
             <div className="mt-4 p-4 bg-blue-100 rounded-lg flex justify-between items-center">
-              <p>Lumina has a suggestion: "{aiMessage}"</p>
+              <p>Lumina has a suggestion!</p>
               <div><Button onClick={handleLetAiSpeak}>Let Lumina Speak</Button><Button onClick={handleDismiss} variant="ghost">Dismiss</Button></div>
             </div>
           )}

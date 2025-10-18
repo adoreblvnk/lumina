@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
     const audioBlob = formData.get('audio') as Blob;
     const prompt = formData.get('prompt') as string;
     const discussionMode = formData.get('discussionMode') as 'Breadth' | 'Depth';
+    const transcribeOnly = formData.get('transcribeOnly') === 'true';
 
     if (!audioBlob || !prompt) {
       return NextResponse.json({ error: 'Missing audio blob or discussion prompt' }, { status: 400 });
@@ -64,6 +65,14 @@ export async function POST(req: NextRequest) {
 
     // Append the new transcript to the history for context
     conversationHistory += transcript + " ";
+
+    // If transcribeOnly flag is set, return early without analysis
+    if (transcribeOnly) {
+      return NextResponse.json({
+        transcript,
+        status: 'transcribed'
+      });
+    }
 
     // 2. Analyze the transcript for intervention triggers using a Groq language model
     const analysisPrompt = `
