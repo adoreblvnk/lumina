@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createGroq } from '@ai-sdk/groq';
+import { elevenlabs } from '@ai-sdk/elevenlabs';
 import { experimental_transcribe as transcribe } from 'ai';
 import { generateText } from 'ai';
 
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Transcribe the incoming audio chunk using Groq's Whisper model
     const { text: transcript } = await transcribe({
-      model: groq.transcription('whisper-large-v3'),
+      model: elevenlabs.transcription('scribe_v1'),
       audio: await audioBlob.arrayBuffer(),
     });
 
