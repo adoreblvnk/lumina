@@ -3,22 +3,35 @@
 import { Button } from "@/components/ui/button";
 import * as React from "react";
 import { useState, useEffect, useRef } from "react";
+import gsap from "gsap";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Orb } from "@/components/ui/orb";
 import { DiscussionView } from "./DiscussionView";
+const useMountReveal = () => {
+  React.useEffect(() => {
+    const tl = gsap.timeline();
+    tl.from(".lumina-title", { y: 20, opacity: 0, duration: 0.6, ease: "power2.out" })
+      .from(".lumina-subtitle", { y: 12, opacity: 0, duration: 0.4 }, "<0.1")
+      .from(".lumina-cta", { y: 10, opacity: 0, duration: 0.4 }, "<0.05");
+    return () => tl.kill();
+  }, []);
+};
 
-const WelcomeScreen = ({ onGetStarted }: { onGetStarted: () => void }) => (
-  <div className="text-center">
-    <h1 className="text-4xl font-bold">Lumina</h1>
-    <p className="text-lg mt-2">Your AI Discussion Facilitator</p>
-    <p className="mt-4 max-w-md mx-auto">
-      Lumina helps keep your group discussions on track by providing gentle nudges and helpful suggestions.
-    </p>
-    <Button onClick={onGetStarted} className="mt-6">
-      Get Started
-    </Button>
-  </div>
-);
+const WelcomeScreen = ({ onGetStarted }: { onGetStarted: () => void }) => {
+  useMountReveal();
+  return (
+    <div className="text-center">
+      <h1 className="lumina-title text-5xl font-extrabold tracking-tight">Lumina</h1>
+      <p className="lumina-subtitle text-base mt-2 opacity-80">AI Discussion Facilitator for small-group learning</p>
+      <p className="mt-4 max-w-md mx-auto">
+        Lumina keeps your discussion focused and inclusive with real-time, supportive interventions.
+      </p>
+      <Button onClick={onGetStarted} className="lumina-cta mt-6">
+        Get Started
+      </Button>
+    </div>
+  );
+};
 
 const StudentCountScreen = ({ onNext }: { onNext: (count: number) => void }) => {
   const [studentCount, setStudentCount] = useState(4);

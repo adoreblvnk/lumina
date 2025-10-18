@@ -136,3 +136,11 @@ body {
         transform: translate(0, 0) rotate(360deg);
     }
 }
+
+/* GSAP-friendly layers */
+.lumina-blob { will-change: transform, filter; }
+.lumina-title, .lumina-subtitle, .lumina-cta { will-change: transform, opacity; }
+
+/* Landing helpers */
+.ll-reveal { will-change: transform, opacity; }
+
