@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await response.json();
-    const text = result.transcription;
+    const text = result.text;
 
     if (typeof text !== 'string') {
         console.error('Could not find transcription string in ElevenLabs response:', result);

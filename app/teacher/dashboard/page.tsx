@@ -7,13 +7,12 @@ const TeacherDashboardPage = () => {
   const [alerts, setAlerts] = useState<string[]>([]);
 
   useEffect(() => {
-    // --- CHANGE THIS LINE ---
-    const ws = new WebSocket('ws://localhost:3001/ws?channel=teacher');
+    const ws = new WebSocket('ws://localhost:3001?channel=teacher');
 
     ws.onopen = () => {
       console.log('Teacher dashboard connected to WebSocket');
     };
-    // ... rest of the file is the same
+    
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
       if (message.type === 'SEVERE_ALERT') {
@@ -25,8 +24,18 @@ const TeacherDashboardPage = () => {
       console.log('Teacher dashboard disconnected from WebSocket');
     };
 
+    // Simulate an alert for demonstration
+    const timer = setTimeout(() => {
+        fetch('http://localhost:3001/alert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: 'Group 1 has been silent for a long time.' }),
+        });
+    }, 5000);
+
     return () => {
       ws.close();
+      clearTimeout(timer);
     };
   }, []);
 

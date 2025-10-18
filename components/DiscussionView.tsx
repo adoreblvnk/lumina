@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { useAgentConversation } from "@/app/hooks/useAgentConversation";
+import { ElevenStreamingWeb } from "@/lib/stream";
 
 // --- Components ---
 
@@ -67,52 +69,31 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
   const [keyInsights, setKeyInsights] = useState(3);
   const [currentSpeaker, setCurrentSpeaker] = useState("None");
   
-  const ws = useRef<WebSocket | null>(null);
-  const audioPlayer = useRef<HTMLAudioElement | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioPlayer = useRef<ElevenStreamingWeb | null>(null);
+
+  const { startConversation, stopConversation, isConnected } = useAgentConversation({
+    onUserTranscript: (transcript) => {
+      console.log("User transcript:", transcript);
+      // Diarization is not available in this event, so we can't know who is speaking.
+      // We can show the transcript if we want.
+    },
+    onAgentResponse: (response) => {
+      setAiWantsToSpeak(true);
+      setAiMessage(response || "Lumina has a suggestion.");
+    },
+    onAudioChunk: (audio_base_64) => {
+      if (!aiSpeaking) {
+        setAiWantsToSpeak(false);
+        setAiSpeaking(true);
+        setAiMessage("Lumina is speaking...");
+        audioPlayer.current?.initStream();
+      }
+      audioPlayer.current?.playChunk({ buffer: audio_base_64 });
+    }
+  });
 
   useEffect(() => {
-    ws.current = new WebSocket('ws://localhost:3001');
-    audioPlayer.current = new Audio();
-
-    ws.current.onopen = () => {
-      console.log('WebSocket connected');
-      ws.current?.send(JSON.stringify({ type: 'INIT', payload: { studentNames } }));
-      startRecording();
-    };
-
-    ws.current.onmessage = (event) => {
-      if (typeof event.data === 'string') {
-        const message = JSON.parse(event.data);
-        if (message.type === 'transcript') {
-          const speakerName = studentNames[message.speaker - 1] || `Student ${message.speaker}`;
-          setCurrentSpeaker(speakerName);
-        } else if (message.type === 'intervention_suggestion') {
-          setAiWantsToSpeak(true);
-          setAiMessage(message.payload || "Lumina has a suggestion."); // Use payload or a generic message
-        }
-      } else if (event.data instanceof Blob) {
-        // This is audio data for a severe intervention
-        console.log('[Audio] Received audio from server.');
-        const audioUrl = URL.createObjectURL(event.data);
-        if (audioPlayer.current) {
-          setAiWantsToSpeak(false);
-          setAiSpeaking(true);
-          setAiMessage("Lumina is speaking..."); // Placeholder message
-          audioPlayer.current.src = audioUrl;
-          audioPlayer.current.play();
-          audioPlayer.current.onended = () => {
-            setAiSpeaking(false);
-            setAiMessage("");
-          };
-        }
-      }
-    };
-
-    ws.current.onclose = () => {
-      console.log('WebSocket disconnected');
-      stopRecording();
-    };
+    audioPlayer.current = new ElevenStreamingWeb();
 
     const timer = setInterval(() => {
       setTimeRemaining(prevTime => (prevTime > 0 ? prevTime - 1 : 0));
@@ -120,36 +101,17 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
 
     return () => {
       clearInterval(timer);
-      if (ws.current) ws.current.close();
-      stopRecording();
     };
-  }, [studentNames]);
+  }, []);
 
-  const startRecording = async () => {
+  const handleStart = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0 && ws.current?.readyState === WebSocket.OPEN) {
-          ws.current.send(event.data);
-          console.log(`[Audio] Sent ${event.data.size} byte audio chunk to server.`);
-        }
-      };
-      
-      // Start recording, firing ondataavailable every 20 seconds
-      mediaRecorderRef.current.start(20000); 
-
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      await startConversation();
     } catch (error) {
-      console.error("Error accessing microphone:", error);
+      console.error('Failed to start conversation:', error);
     }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.stop();
-    }
-  };
+  }, [startConversation]);
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -158,14 +120,13 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
   };
 
   const handleLetAiSpeak = () => {
-    // The server sends audio directly for severe interventions.
-    // For mild ones, we just show the text. This button can be a "show suggestion" button.
     setAiWantsToSpeak(false);
-    setAiSpeaking(true); // We'll just display the message the server sent.
+    setAiSpeaking(true);
+    // The audio will play via onAudioChunk. We can have a timeout to hide the message.
     setTimeout(() => {
       setAiSpeaking(false);
       setAiMessage("");
-    }, 5000); // Hide message after 5 seconds
+    }, 5000); // Assuming audio playback is around 5s
   };
 
   const handleDismiss = () => {
@@ -181,6 +142,11 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
             <div><h2 className="text-xl font-bold">Discussion Topic</h2><p className="mt-2 text-lg">"Should school students be forced to wear school uniforms?"</p></div>
             <div className="text-right"><p className="font-bold">Time Remaining</p><p className="text-2xl">{formatTime(timeRemaining)}</p></div>
           </div>
+          <div className="flex gap-2 my-4">
+            <Button onClick={handleStart} disabled={isConnected}>Start Conversation</Button>
+            <Button onClick={stopConversation} disabled={!isConnected} variant="destructive">Stop Conversation</Button>
+          </div>
+          <p>Status: {isConnected ? 'Connected' : 'Disconnected'}</p>
           <div className="mt-4"><p className="font-bold">Current Speaker</p><p>{currentSpeaker}</p></div>
           {aiWantsToSpeak && (
             <div className="mt-4 p-4 bg-blue-100 rounded-lg flex justify-between items-center">
