@@ -1,5 +1,5 @@
 {
-  "name": "convai-demo",
+  "name": "lumina",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -30,7 +30,7 @@
     "three": "^0.180.0"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/bun": "^1.3.0",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "^8",
