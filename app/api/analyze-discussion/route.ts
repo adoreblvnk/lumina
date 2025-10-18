@@ -1,11 +1,17 @@
+import 'dotenv/config';
 import { NextRequest, NextResponse } from 'next/server';
 import { createGroq } from '@ai-sdk/groq';
 import { elevenlabs } from '@ai-sdk/elevenlabs';
 import { experimental_transcribe as transcribe } from 'ai';
 import { generateText } from 'ai';
+import { ElevenLabsClient, play } from "@elevenlabs/elevenlabs-js";
 
 const groq = createGroq({
   apiKey: process.env.GROQ_API_KEY,
+});
+
+const elevenlabsClient = new ElevenLabsClient({
+  apiKey: process.env.ELEVENLABS_API_KEY,
 });
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +20,23 @@ export const dynamic = 'force-dynamic';
 let conversationHistory = "";
 let silenceStreak = 0;
 const SILENCE_THRESHOLD = 2; // 2 consecutive silent chunks trigger an intervention
+
+
+// Helper function to convert ReadableStream to AsyncIterable
+async function* streamToAsyncIterable<T>(stream: ReadableStream<T>): AsyncIterable<T> {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        return;
+      }
+      yield value;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,12 +50,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing audio blob or discussion prompt' }, { status: 400 });
     }
 
+    let isolatedAudioBuffer: Buffer;
+    try {
+      // Isolate the audio before transcription
+      const isolatedAudioStream = await elevenlabsClient.audioIsolation.convert({
+        audio: audioBlob,
+      });
+
+      // Convert the isolated audio stream to a Buffer
+      const chunks = [];
+      for await (const chunk of streamToAsyncIterable(isolatedAudioStream)) {
+        chunks.push(chunk);
+      }
+      isolatedAudioBuffer = Buffer.concat(chunks);
+    } catch (error: any) {
+      if (error?.body?.detail?.status === 'invalid_audio_duration') {
+        console.log('Audio duration too short for isolation, proceeding with original audio.');
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        isolatedAudioBuffer = Buffer.from(arrayBuffer);
+      } else {
+        // For any other errors, re-throw them
+        throw error;
+      }
+    }
+
     // 1. Transcribe the incoming audio chunk
     let transcript = '';
     try {
       const { text } = await transcribe({
         model: elevenlabs.transcription('scribe_v1'),
-        audio: await audioBlob.arrayBuffer(),
+        audio: isolatedAudioBuffer,
         providerOptions: {
           elevenlabs: {
             languageCode: 'en',
