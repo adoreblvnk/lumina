@@ -10,8 +10,10 @@ const groq = createGroq({
 
 export const dynamic = 'force-dynamic';
 
-// In-memory store for conversation history (for a single session)
+// In-memory store for conversation history and silence tracking
 let conversationHistory = "";
+let silenceStreak = 0;
+const SILENCE_THRESHOLD = 2; // 2 consecutive silent chunks trigger an intervention
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,16 +26,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing audio blob or discussion prompt' }, { status: 400 });
     }
 
-    // 1. Transcribe the incoming audio chunk using Groq's Whisper model
+    // 1. Transcribe the incoming audio chunk
     const { text: transcript } = await transcribe({
       model: elevenlabs.transcription('scribe_v1'),
       audio: await audioBlob.arrayBuffer(),
     });
 
-    // If the transcript is empty, it's likely silence. No need to process further.
+    // Handle silence
     if (!transcript.trim()) {
-        return NextResponse.json({ status: 'silence', transcript: '' });
+      silenceStreak++;
+      if (silenceStreak >= SILENCE_THRESHOLD) {
+        silenceStreak = 0; // Reset streak after intervention
+        // Generate a mild intervention for silence
+        const interventionSuggestion = `It's been a bit quiet. Maybe we can discuss how the topic of "${prompt}" relates to our own experiences?`;
+        
+        // Notify the teacher dashboard about the intervention
+        fetch('http://localhost:3001/alert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: `A group has been silent. Suggestion: ${interventionSuggestion}` }),
+        }).catch(err => console.error("Failed to send teacher alert for silence:", err));
+
+        return NextResponse.json({
+          status: 'intervention',
+          transcript: '',
+          isOffTopic: false,
+          isImbalanced: false,
+          keyTopics: [],
+          interventionSuggestion: interventionSuggestion,
+        });
+      }
+      return NextResponse.json({ status: 'silence', transcript: '' });
     }
+
+    // If there's speech, reset the silence streak
+    silenceStreak = 0;
 
     // Append the new transcript to the history for context
     conversationHistory += transcript + " ";
