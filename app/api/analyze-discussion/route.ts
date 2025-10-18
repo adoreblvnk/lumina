@@ -107,8 +107,28 @@ export async function POST(req: NextRequest) {
       silenceStreak++;
       if (silenceStreak >= SILENCE_THRESHOLD) {
         silenceStreak = 0; // Reset streak after a long silence
+
+        // Use Groq to generate a re-engagement question
+        const reengagementPrompt = `
+          The user has been silent for a while. The main topic of discussion is "${prompt}".
+          Generate a concise, open-ended question to re-engage the user and encourage them to speak.
+          The question should be related to the main topic.
+          For example: "Is there anything you'd like to add, or a different question you'd like to explore?"
+          Respond with only the question.
+        `;
+
+        const { text: reengagementQuestion } = await generateText({
+          model: groq('openai/gpt-oss-20b'),
+          prompt: reengagementPrompt,
+        });
+
+        return NextResponse.json({
+          status: 'intervention',
+          transcript: '',
+          interventionSuggestion: "I notice you haven't been talking. " + reengagementQuestion
+        });
       }
-      // Lumina remains silent on silence, per requirements.
+      // Lumina remains silent on shorter silences.
       return NextResponse.json({ status: 'silence', transcript: '' });
     }
 

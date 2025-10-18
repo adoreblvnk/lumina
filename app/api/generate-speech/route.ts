@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
         stability: 0,
         similarityBoost: 1.0,
         useSpeakerBoost: true,
-        speed: 1.0,
+        speed: 1,
       },
     });
 
