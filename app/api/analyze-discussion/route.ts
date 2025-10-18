@@ -39,26 +39,9 @@ export async function POST(req: NextRequest) {
     if (!transcript.trim()) {
       silenceStreak++;
       if (silenceStreak >= SILENCE_THRESHOLD) {
-        silenceStreak = 0; // Reset streak after intervention
-        // Generate a mild intervention for silence
-        const interventionSuggestion = `It's been a bit quiet. Maybe we can discuss how the topic of "${prompt}" relates to our own experiences?`;
-        
-        // Notify the teacher dashboard about the intervention
-        fetch('http://localhost:3001/alert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: `A group has been silent. Suggestion: ${interventionSuggestion}` }),
-        }).catch(err => console.error("Failed to send teacher alert for silence:", err));
-
-        return NextResponse.json({
-          status: 'intervention',
-          transcript: '',
-          isOffTopic: false,
-          isImbalanced: false,
-          keyTopics: [],
-          interventionSuggestion: interventionSuggestion,
-        });
+        silenceStreak = 0; // Reset streak after a long silence
       }
+      // Lumina remains silent on silence, per requirements.
       return NextResponse.json({ status: 'silence', transcript: '' });
     }
 
@@ -98,7 +81,7 @@ export async function POST(req: NextRequest) {
           "interventionSuggestion": string | null
         }
 
-        If "isOffTopic" or "isImbalanced" is true, provide a concise, supportive "interventionSuggestion" to guide the students back on track. For example: "That's an interesting perspective. How does it relate to the core topic of school uniforms?" or "We've covered the financial aspect well. What are some arguments for or against uniforms related to school identity?". Otherwise, "interventionSuggestion" should be null.
+        If "isOffTopic" is true, provide a concise, supportive "interventionSuggestion" to guide the students back on track. For example: "That's an interesting perspective. How does it relate to the core topic of school uniforms?". Otherwise, "interventionSuggestion" should be null.
     `;
 
     const { text: analysisResultText } = await generateText({
