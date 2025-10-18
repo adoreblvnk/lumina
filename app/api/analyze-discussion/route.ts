@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
           "interventionSuggestion": string | null
         }
 
-        If "isOffTopic" is true, provide a concise, supportive "interventionSuggestion" to guide the students back on track. For example: "That's an interesting perspective. How does it relate to the core topic of school uniforms?". Otherwise, "interventionSuggestion" should be null.
+        If "isOffTopic" is true, provide a creative, open-ended question as an "interventionSuggestion" to gently guide the students back to the main topic. The question should be related to the original prompt and encourage further discussion. For example, if the topic is school uniforms, you could ask "Have we considered the financial impact of uniforms on families?" or "What are your thoughts on how uniforms affect student individuality?". The tone should be curious and helpful, not critical. If no intervention is needed, "interventionSuggestion" should be null.
     `;
 
     const { text: analysisResultText } = await generateText({
