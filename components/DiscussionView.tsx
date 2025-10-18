@@ -77,43 +77,43 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
   const discussionPrompt = "Should school students be forced to wear school uniforms?";
   const discussionMode = "Breadth";
 
-  const processAudioAndAnalyze = useCallback(async () => {
-    if (audioChunksRef.current.length === 0) return;
-
-    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-    audioChunksRef.current = [];
-
-    const formData = new FormData();
-    formData.append('audio', audioBlob);
-    formData.append('prompt', discussionPrompt);
-    formData.append('discussionMode', discussionMode);
-
-    try {
-      const response = await fetch('/api/analyze-discussion', { method: 'POST', body: formData });
-      if (!response.ok) throw new Error('API request failed');
-      
-      const result = await response.json();
-      
-      if (result.transcript) {
-        setTranscripts(prev => [...prev, result.transcript]);
-        if (result.transcript.includes('?')) setQuestionsAsked(prev => prev + 1);
-      }
-
-      if (result.keyTopics) setKeyTopics(result.keyTopics);
-      
-      setDiscussionDepth(prev => Math.min(100, prev + 2));
-
-      if (result.interventionSuggestion && !aiWantsToSpeak && !aiSpeaking) {
-        setAiMessage(result.interventionSuggestion);
-        setAiWantsToSpeak(true);
-      }
-
-    } catch (error) {
-      console.error("Error during audio analysis:", error);
-    }
-  }, [aiWantsToSpeak, aiSpeaking]);
-
   const startConversation = useCallback(async () => {
+    const processAudioAndAnalyze = async () => {
+      if (audioChunksRef.current.length === 0) return;
+
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      audioChunksRef.current = [];
+
+      const formData = new FormData();
+      formData.append('audio', audioBlob);
+      formData.append('prompt', discussionPrompt);
+      formData.append('discussionMode', discussionMode);
+
+      try {
+        const response = await fetch('/api/analyze-discussion', { method: 'POST', body: formData });
+        if (!response.ok) throw new Error('API request failed');
+        
+        const result = await response.json();
+        
+        if (result.transcript) {
+          setTranscripts(prev => [...prev, result.transcript]);
+          if (result.transcript.includes('?')) setQuestionsAsked(prev => prev + 1);
+        }
+
+        if (result.keyTopics) setKeyTopics(result.keyTopics);
+        
+        setDiscussionDepth(prev => Math.min(100, prev + 2));
+
+        if (result.interventionSuggestion && !aiWantsToSpeak && !aiSpeaking) {
+          setAiMessage(result.interventionSuggestion);
+          setAiWantsToSpeak(true);
+        }
+
+      } catch (error) {
+        console.error("Error during audio analysis:", error);
+      }
+    };
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setIsRecording(true);
@@ -137,9 +137,45 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
       console.error('Failed to get microphone access:', error);
       alert("Microphone access is required to start the discussion.");
     }
-  }, [processAudioAndAnalyze]);
+  }, [aiWantsToSpeak, aiSpeaking]);
 
   const stopConversation = useCallback(() => {
+    const processAudioAndAnalyze = async () => {
+      if (audioChunksRef.current.length === 0) return;
+
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      audioChunksRef.current = [];
+
+      const formData = new FormData();
+      formData.append('audio', audioBlob);
+      formData.append('prompt', discussionPrompt);
+      formData.append('discussionMode', discussionMode);
+
+      try {
+        const response = await fetch('/api/analyze-discussion', { method: 'POST', body: formData });
+        if (!response.ok) throw new Error('API request failed');
+        
+        const result = await response.json();
+        
+        if (result.transcript) {
+          setTranscripts(prev => [...prev, result.transcript]);
+          if (result.transcript.includes('?')) setQuestionsAsked(prev => prev + 1);
+        }
+
+        if (result.keyTopics) setKeyTopics(result.keyTopics);
+        
+        setDiscussionDepth(prev => Math.min(100, prev + 2));
+
+        if (result.interventionSuggestion && !aiWantsToSpeak && !aiSpeaking) {
+          setAiMessage(result.interventionSuggestion);
+          setAiWantsToSpeak(true);
+        }
+
+      } catch (error) {
+        console.error("Error during audio analysis:", error);
+      }
+    };
+
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
@@ -147,16 +183,19 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
     if (analysisIntervalRef.current) clearInterval(analysisIntervalRef.current);
     setIsRecording(false);
     processAudioAndAnalyze(); // Process any final audio chunk
-  }, [processAudioAndAnalyze]);
+  }, [aiWantsToSpeak, aiSpeaking]);
 
   useEffect(() => {
     audioPlayerRef.current = new Audio();
     const timer = setInterval(() => setTimeRemaining(prev => (prev > 0 ? prev - 1 : 0)), 1000);
+    
+    startConversation();
+
     return () => {
       clearInterval(timer);
       stopConversation();
     };
-  }, [stopConversation]);
+  }, [startConversation, stopConversation]);
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -204,11 +243,7 @@ export const DiscussionView = ({ studentNames }: DiscussionViewProps) => {
             <div><h2 className="text-xl font-bold">Discussion Topic</h2><p className="mt-2 text-lg">"{discussionPrompt}"</p></div>
             <div className="text-right"><p className="font-bold">Time Remaining</p><p className="text-2xl">{formatTime(timeRemaining)}</p></div>
           </div>
-          <div className="flex gap-2 my-4">
-            <Button onClick={startConversation} disabled={isRecording}>Start Conversation</Button>
-            <Button onClick={stopConversation} disabled={!isRecording} variant="destructive">Stop Conversation</Button>
-          </div>
-          <p>Status: {isRecording ? 'Recording and Analyzing...' : 'Stopped'}</p>
+          <p>Status: {isRecording ? 'Live analysis is active.' : 'Starting...'}</p>
           <div className="mt-4"><p className="font-bold">Live Transcript</p>
             <div className="mt-1 h-24 overflow-y-auto bg-gray-50 p-2 rounded border">
               {transcripts.length > 0 ? transcripts.map((t, i) => <p key={i}>{t}</p>) : "..."}
