@@ -2,7 +2,7 @@ import type {Metadata} from "next";
 import "./globals.css";
 import GsapBackground from "@/components/GsapBackground";
 import Link from "next/link";
-import {ElevenLabsLogo, GithubLogo} from "@/components/logos";
+import { GithubLogo } from "@/components/logos";
 
 export const metadata: Metadata = {
     title: "Lumina",
@@ -20,9 +20,7 @@ export default function RootLayout({children}: Readonly<{ children: React.ReactN
             >
                 <div className={"flex"}>
                     <Link href={"/"} prefetch={true}>
-                        <ElevenLabsLogo
-                            className={"h-[15px] w-auto hover:text-gray-500"}
-                        />
+                        <span className={"text-xl font-bold hover:text-gray-500"}>Lumina</span>
                     </Link>
                 </div>
 
