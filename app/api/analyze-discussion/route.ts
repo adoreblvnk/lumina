@@ -31,6 +31,8 @@ export async function POST(req: NextRequest) {
     const { text: transcript } = await transcribe({
       model: elevenlabs.transcription('scribe_v1'),
       audio: await audioBlob.arrayBuffer(),
+      tagAudioEvents: false,
+      languageCode: "eng",
     });
 
     // Handle silence
