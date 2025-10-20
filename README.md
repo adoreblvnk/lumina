@@ -5,7 +5,7 @@
     Real-time AI agent that facilitates classroom discussions with voice interventions, keeping students engaged.
   </p>
   <p>
-    Built With: &bull;
+    Built With:
     <a href="https://nextjs.org">Next.js</a> &bull;
     <a href="https://github.com/websockets/ws">WebSocket</a> &bull;
     <a href="https://ai-sdk.dev">Vercel AI SDK</a> &bull;
