@@ -11,6 +11,9 @@ export const metadata: Metadata = {
 export default function RootLayout({children}: Readonly<{ children: React.ReactNode }>) {
     return (
         <html lang="en" className={"h-full w-full"}>
+        <head>
+            <link rel="icon" href="/logo.png" />
+        </head>
         <body className={`antialiased w-full h-full lex flex-col`}>
         <div className="flex flex-col flex-grow w-full items-center justify-center sm:px-4">
             <nav
@@ -18,15 +21,15 @@ export default function RootLayout({children}: Readonly<{ children: React.ReactN
                     "sm:fixed w-full top-0 left-0 grid grid-cols-2 py-4 px-8"
                 }
             >
-                <div className={"flex"}>
+                <div className={"flex items-center"}>
                     <Link href={"/"} prefetch={true}>
-                        <span className={"text-xl font-bold hover:text-gray-500"}>Lumina</span>
+                        <img src="/logo.png" alt="Lumina Logo" width={32} height={32} />
                     </Link>
                 </div>
 
                 <div className={"flex gap-4 justify-end"}>
                     <Link
-                        href="https://github.com/your-repo/lumina-hackathon"
+                        href="https://github.com/adoreblvnk/lumina"
                         target="_blank"
                         rel="noopener noreferrer"
                         className={"py-0.5"}
